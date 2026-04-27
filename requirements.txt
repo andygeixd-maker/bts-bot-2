@@ -3,4 +3,4 @@ requests
 playwright
 pillow
 pytesseract
-os.system("playwright install chromium")
+
