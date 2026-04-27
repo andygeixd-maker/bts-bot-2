@@ -1,10 +1,9 @@
 import discord
 from discord.ext import commands, tasks
-import requests
 import asyncio
 import time
 import os
-import random
+from playwright.async_api import async_playwright
 
 # =====================
 # CONFIG
@@ -14,8 +13,48 @@ CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 ROLE_ID = os.getenv("ROLE_ID")
 URL = os.getenv("URL")
 
-CHECK_EVERY = 10
+CHECK_EVERY = 4
 COOLDOWN = 120
+
+browser = None
+page = None
+pw = None
+
+# =====================
+# PLAYWRIGHT INIT
+# =====================
+async def init_browser():
+    global browser, page, pw
+
+    pw = await async_playwright().start()
+
+    browser = await pw.chromium.launch(
+        headless=True,
+        args=["--no-sandbox"]
+    )
+
+    context = await browser.new_context()
+    page = await context.new_page()
+
+# =====================
+# SAFE RESTART
+# =====================
+async def restart_browser():
+    global browser, page, pw
+
+    try:
+        if browser:
+            await browser.close()
+    except:
+        pass
+
+    try:
+        if pw:
+            await pw.stop()
+    except:
+        pass
+
+    await init_browser()
 
 # =====================
 # BOT SETUP
@@ -25,29 +64,23 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-last_state = "unknown"
+last_state = "no"
 last_alert = 0
 started_at = time.time()
 last_error = None
 
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-    "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
-    "Referer": "https://www.google.com/"
-}
-
 # =====================
-# CHECK SITE
+# CHECK SITE (TU LÓGICA MEJORADA)
 # =====================
-def check_site():
+async def check_site():
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
+        if page is None:
+            return "no"
 
-        r = requests.get(URL, headers=headers, timeout=10)
-        text = r.text.lower()
+        await page.goto(URL, timeout=30000)
+        await asyncio.sleep(2)
 
-        # debug opcional
-        print("DEBUG:", text[:300])
+        text = (await page.content()).lower()
 
         no_words = [
             "sin disponibilidad",
@@ -70,14 +103,12 @@ def check_site():
             "poca disponibilidad"
         ]
 
-        # 🚨 prioridad negativa primero (más seguro)
         if any(w in text for w in no_words):
             return "no"
 
         if any(w in text for w in yes_words):
             return "yes"
 
-        # 🔥 fallback seguro
         return "no"
 
     except Exception as e:
@@ -85,7 +116,7 @@ def check_site():
         return "no"
 
 # =====================
-# EMBED
+# EMBED (TU ESTILO)
 # =====================
 def make_embed():
     embed = discord.Embed(
@@ -95,12 +126,12 @@ def make_embed():
     )
 
     embed.add_field(name="🎟️ Link", value=URL, inline=False)
-    embed.set_image(url="https://imgur.com/jctrM4G")
+    embed.set_image(url="https://i.imgur.com/jctrM4G.gif")
 
     return embed
 
 # =====================
-# STATUS PANEL
+# STATUS PANEL (FIXED)
 # =====================
 def make_status():
     uptime = int(time.time() - started_at)
@@ -117,27 +148,7 @@ def make_status():
     return embed
 
 # =====================
-# BOTONES
-# =====================
-class ControlView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="TEST ALERT", style=discord.ButtonStyle.primary)
-    async def test(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🔥 Test ejecutado", ephemeral=True)
-        await interaction.channel.send(embed=make_embed())
-
-    @discord.ui.button(label="FORCE CHECK", style=discord.ButtonStyle.success)
-    async def force(self, interaction: discord.Interaction, button: discord.ui.Button):
-        state = check_site()
-        await interaction.response.send_message(f"🔎 Estado: {state}", ephemeral=True)
-
-        if state == "yes":
-            await interaction.channel.send(embed=make_embed())
-
-# =====================
-# LOOP (PRO)
+# LOOP ESTABLE
 # =====================
 @tasks.loop(seconds=CHECK_EVERY)
 async def monitor():
@@ -148,7 +159,7 @@ async def monitor():
         return
 
     try:
-        state = check_site()
+        state = await check_site()
         print("Estado:", state)
 
         if last_state == "no" and state == "yes":
@@ -159,12 +170,12 @@ async def monitor():
 
                 role_ping = f"<@&{ROLE_ID}>"
 
-                for _ in range(5):
+                for _ in range(3):
                     await channel.send(
                         content=role_ping,
                         embed=make_embed()
                     )
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(2)
 
                 last_alert = now
                 print("🚨 ALERTA ENVIADA")
@@ -173,6 +184,7 @@ async def monitor():
 
     except Exception as e:
         print("Monitor error:", e)
+        await restart_browser()
 
 # =====================
 # EVENTS
@@ -181,8 +193,11 @@ async def monitor():
 async def on_ready():
     print(f"Conectado como {bot.user}")
 
+    await init_browser()
+
     channel = bot.get_channel(CHANNEL_ID)
-    await channel.send("💜 BOT BTS ONLINE", view=ControlView())
+    if channel:
+        await channel.send("💜 BOT BTS ONLINE")
 
     monitor.start()
 
@@ -191,7 +206,8 @@ async def on_ready():
 # =====================
 @bot.command()
 async def status(ctx):
-    await ctx.send(embed=make_status())
+    uptime = int(time.time() - started_at)
+    await ctx.send(f"💜 Estado: {last_state} | Uptime: {uptime}s")
 
 # =====================
 # RUN
