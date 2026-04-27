@@ -27,28 +27,32 @@ MAX_ALERT = 5
 alert_count = 0
 
 def check_site():
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
+    headers = {"User-Agent": "Mozilla/5.0"}
+    r = requests.get(URL, headers=headers, timeout=10)
+    text = r.text.lower()
 
-        r = requests.get(URL, headers=headers, timeout=10)
-        text = r.text.lower()
+    keywords_yes = [
+        "comprar",
+        "buy tickets",
+        "tickets available",
+        "ver boletos",
+        "boletos disponibles"
+    ]
 
-        # señales negativas
-        if "sin disponibilidad" in text or "sold out" in text or "agotado" in text:
-            return "no"
+    keywords_no = [
+        "sin disponibilidad",
+        "sold out",
+        "agotado",
+        "no hay boletos"
+    ]
 
-        # señales positivas
-        if "comprar boletos" in text or "buy tickets" in text or "comprar" in text:
-            return "yes"
+    if any(k in text for k in keywords_yes):
+        return "yes"
 
-        return "unknown"
+    if any(k in text for k in keywords_no):
+        return "no"
 
-    except Exception as e:
-        print("Error web:", e)
-        return "unknown"
-
+    return "unknown"
 
 def make_embed():
     embed = discord.Embed(
