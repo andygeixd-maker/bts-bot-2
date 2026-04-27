@@ -41,44 +41,48 @@ AGENTS = [
 # =====================
 def check_site():
     try:
-        headers = {"User-Agent": random.choice(AGENTS)}
+        headers = {"User-Agent": "Mozilla/5.0"}
 
         r = requests.get(URL, headers=headers, timeout=10)
         text = r.text.lower()
 
-        score = 0
+        # debug opcional
+        print("DEBUG:", text[:300])
 
-        positive = [
-            "comprar", "buy", "tickets",
-            "find tickets", "available", "poca disponibilidad"
-        ]
-
-        negative = [
+        no_words = [
             "sin disponibilidad",
             "sold out",
             "agotado",
-            "no hay boletos"
+            "no hay boletos",
+            "no disponible",
+            "boletos agotados"
         ]
 
-        for w in positive:
-            if w in text:
-                score += 2
+        yes_words = [
+            "comprar",
+            "buy",
+            "tickets",
+            "get tickets",
+            "seleccionar",
+            "available",
+            "disponible",
+            "ver boletos",
+            "poca disponibilidad"
+        ]
 
-        for w in negative:
-            if w in text:
-                score -= 3
-
-        if score >= 2:
-            return "yes"
-        if score <= -2:
+        # 🚨 prioridad negativa primero (más seguro)
+        if any(w in text for w in no_words):
             return "no"
 
-        return "unknown"
+        if any(w in text for w in yes_words):
+            return "yes"
+
+        # 🔥 fallback seguro
+        return "no"
 
     except Exception as e:
-        global last_error
-        last_error = str(e)
-        return "error"
+        print("Error check:", e)
+        return "no"
 
 # =====================
 # EMBED
@@ -91,6 +95,8 @@ def make_embed():
     )
 
     embed.add_field(name="🎟️ Link", value=URL, inline=False)
+    embed.set_image(url="https://imgur.com/a/Hkxs6cl")
+
     return embed
 
 # =====================
