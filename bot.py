@@ -10,7 +10,7 @@ CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 ROLE_ID = os.getenv("ROLE_ID")
 URL = os.getenv("URL")
 
-CHECK_EVERY = 5
+CHECK_EVERY = 4
 COOLDOWN = 120
 DOUBLE_CHECK_WAIT = 5 
 BASE_DELAY = 3
@@ -19,11 +19,17 @@ MAX_DELAY = 8
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 last_state = None
 last_alert = 0
 MAX_ALERT = 5
 alert_count = 0
+
+AGENTS = [
+    "Mozilla/5.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
 
 def check_site():
     try:
@@ -83,6 +89,30 @@ def make_embed():
 
     embed.set_footer(text="Sistema automático de alertas BTS 💜")
     return embed
+  
+def make_status():
+    uptime = int(time.time() - started_at)
+
+    embed = discord.Embed(
+        title="💜 Estado del Bot",
+        color=0xA020F0
+    )
+
+    embed.add_field(name="Último estado", value=last_state)
+    embed.add_field(name="Uptime", value=f"{uptime}s")
+    embed.add_field(name="Check rate", value=f"{CHECK_MIN}-{CHECK_MAX}s")
+
+    return embed
+  
+async def send_alert(channel):
+    role_ping = f"<@&{ROLE_ID}>"
+
+    for i in range(5):
+        await channel.send(
+            content=role_ping,
+            embed=make_alert()
+        )
+        await asyncio.sleep(2)
 
 
 @client.event
@@ -129,6 +159,21 @@ async def on_ready():
 
         except Exception as e:
             print("Error loop:", e)
+
+@bot.event
+async def on_ready():
+    print(f"Conectado como {bot.user}")
+    bot.loop.create_task(monitor())
+
+@bot.command()
+async def test(ctx):
+    await ctx.send("🔥 Test manual iniciado")
+    await send_alert(ctx.channel)
+
+@bot.command()
+async def status(ctx):
+    await ctx.send(embed=make_status())
+
 
 
 client.run(TOKEN)
