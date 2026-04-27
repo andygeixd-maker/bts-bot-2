@@ -121,23 +121,21 @@ async def monitor():
         state = check_site()
         print("Estado:", state)
 
-        if last_state == "no" and state == "yes":
-            now = time.time()
+       if last_state == "no" and state == "yes":
+    now = time.time()
 
-            if now - last_alert > COOLDOWN:
+    if now - last_alert > COOLDOWN:
 
-                role_ping = f"<@&{ROLE_ID}>"
+        await channel.send(
+            content=f"<@&{ROLE_ID}> 🚨",
+            embed=make_embed(),
+            allowed_mentions=discord.AllowedMentions(roles=True)
+        )
 
-                for _ in range(3):
-                    await channel.send(
-                        content=role_ping,
-                        embed=make_embed()
-                    )
-                    await asyncio.sleep(2)
+        await asyncio.sleep(2)
 
-                last_alert = now
-                print("🚨 ALERTA ENVIADA")
-
+        last_alert = now
+        print("🚨 ALERTA ENVIADA")
         last_state = state
 
     except Exception as e:
