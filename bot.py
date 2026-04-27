@@ -20,7 +20,8 @@ MAX_DELAY = 8
   
 
 intents = discord.Intents.default()
-client = discord.Client(intents=intents)
+intents.message_content = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 last_state = None
@@ -34,14 +35,18 @@ AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
         ]
 def check_site():
-    try:
+   try:
         headers = {
             "User-Agent": "Mozilla/5.0"
         }
 
-        r = requests.get(URL, headers=headers, timeout=10)
-        text = r.text.lower()
+        r = requests.get(URL, headers=headers, timeout=15)
 
+        if r.status_code != 200:
+            print("HTTP error:", r.status_code)
+            return "unknown"
+
+        text = r.text.lower()
         no_words = [
             "sin disponibilidad",
             "sold out",
