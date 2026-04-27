@@ -14,7 +14,7 @@ CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 ROLE_ID = os.getenv("ROLE_ID")
 URL = os.getenv("URL")
 
-CHECK_EVERY = 5
+CHECK_EVERY = 10
 COOLDOWN = 120
 
 # =====================
@@ -95,7 +95,7 @@ def make_embed():
     )
 
     embed.add_field(name="🎟️ Link", value=URL, inline=False)
-    embed.set_image(url="https://imgur.com/a/Hkxs6cl")
+    embed.set_image(url="https://imgur.com/jctrM4G")
 
     return embed
 
@@ -159,12 +159,12 @@ async def monitor():
 
                 role_ping = f"<@&{ROLE_ID}>"
 
-                for _ in range(3):
+                for _ in range(5):
                     await channel.send(
                         content=role_ping,
                         embed=make_embed()
                     )
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(3)
 
                 last_alert = now
                 print("🚨 ALERTA ENVIADA")
