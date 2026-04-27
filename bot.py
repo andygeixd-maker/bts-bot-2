@@ -1,186 +1,193 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import requests
 import asyncio
 import time
-from bs4 import BeautifulSoup
 import os
+import random
 
-
+# =====================
+# CONFIG
+# =====================
 TOKEN = os.getenv("TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 ROLE_ID = os.getenv("ROLE_ID")
 URL = os.getenv("URL")
 
-CHECK_EVERY = 4
+CHECK_EVERY = 5
 COOLDOWN = 120
-DOUBLE_CHECK_WAIT = 5 
-BASE_DELAY = 3
-MAX_DELAY = 8
-  
 
+# =====================
+# BOT SETUP
+# =====================
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-last_state = None
+last_state = "unknown"
 last_alert = 0
-MAX_ALERT = 5
-alert_count = 0
+started_at = time.time()
+last_error = None
 
 AGENTS = [
     "Mozilla/5.0",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-        ]
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+]
+
+# =====================
+# CHECK SITE
+# =====================
 def check_site():
-   try:
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
+    try:
+        headers = {"User-Agent": random.choice(AGENTS)}
 
-        r = requests.get(URL, headers=headers, timeout=15)
-
-        if r.status_code != 200:
-            print("HTTP error:", r.status_code)
-            return "unknown"
-
+        r = requests.get(URL, headers=headers, timeout=10)
         text = r.text.lower()
-        no_words = [
+
+        score = 0
+
+        positive = [
+            "comprar", "buy", "tickets",
+            "find tickets", "available", "poca disponibilidad"
+        ]
+
+        negative = [
             "sin disponibilidad",
             "sold out",
             "agotado",
             "no hay boletos"
         ]
 
-        yes_words = [
-            "comprar boletos",
-            "buy tickets",
-            "seleccionar boletos",
-            "tickets available",
-            "find tickets"
-            "poca disponibilidad"
-        ]
+        for w in positive:
+            if w in text:
+                score += 2
 
-        if any(word in text for word in no_words):
-            return "no"
+        for w in negative:
+            if w in text:
+                score -= 3
 
-        if any(word in text for word in yes_words):
+        if score >= 2:
             return "yes"
+        if score <= -2:
+            return "no"
 
         return "unknown"
 
     except Exception as e:
-        print("Error web:", e)
-        return "unknown"
+        global last_error
+        last_error = str(e)
+        return "error"
 
+# =====================
+# EMBED
+# =====================
 def make_embed():
     embed = discord.Embed(
-        title="🚨 BTS CDMX - BOLETOS DETECTADOS 🚨",
-        description="Se detectó posible disponibilidad en Ticketmaster.",
+        title="🚨 BTS CDMX ALERTA 🚨",
+        description="Posible disponibilidad detectada",
         color=0xA020F0
     )
 
-    embed.add_field(
-        name="🎟️ Estado",
-        value="Revisa Ticketmaster inmediatamente.",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🔗 Link",
-        value="https://www.ticketmaster.com.mx/bts-boletos/artist/2110227",
-        inline=False
-    )
-
-    embed.set_footer(text="Sistema automático de alertas BTS 💜")
+    embed.add_field(name="🎟️ Link", value=URL, inline=False)
     return embed
-  
+
+# =====================
+# STATUS PANEL
+# =====================
 def make_status():
     uptime = int(time.time() - started_at)
 
     embed = discord.Embed(
-        title="💜 Estado del Bot",
+        title="💜 BOT STATUS PANEL",
         color=0xA020F0
     )
 
-    embed.add_field(name="Último estado", value=last_state)
-    embed.add_field(name="Uptime", value=f"{uptime}s")
-    embed.add_field(name="Check rate", value=f"{CHECK_MIN}-{CHECK_MAX}s")
+    embed.add_field(name="Estado", value=last_state, inline=True)
+    embed.add_field(name="Uptime", value=f"{uptime}s", inline=True)
+    embed.add_field(name="Error", value=last_error or "None", inline=False)
 
     return embed
-  
-async def send_alert(channel):
-    role_ping = f"<@&{ROLE_ID}>"
 
-    for i in range(5):
-        await channel.send(
-            content=role_ping,
-            embed=make_alert()
-        )
-        await asyncio.sleep(2)
+# =====================
+# BOTONES
+# =====================
+class ControlView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
 
+    @discord.ui.button(label="TEST ALERT", style=discord.ButtonStyle.primary)
+    async def test(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🔥 Test ejecutado", ephemeral=True)
+        await interaction.channel.send(embed=make_embed())
 
-@client.event
-async def on_ready():
+    @discord.ui.button(label="FORCE CHECK", style=discord.ButtonStyle.success)
+    async def force(self, interaction: discord.Interaction, button: discord.ui.Button):
+        state = check_site()
+        await interaction.response.send_message(f"🔎 Estado: {state}", ephemeral=True)
+
+        if state == "yes":
+            await interaction.channel.send(embed=make_embed())
+
+# =====================
+# LOOP (PRO)
+# =====================
+@tasks.loop(seconds=CHECK_EVERY)
+async def monitor():
     global last_state, last_alert
 
-    print(f"Bot listo como {client.user}")
-
-    channel = client.get_channel(CHANNEL_ID)
-
-    if channel is None:
-        print("No se encontró el canal.")
+    channel = bot.get_channel(CHANNEL_ID)
+    if not channel:
         return
 
-    await channel.send("💜 Bot conectado y monitoreando Ticketmaster.")
-    while True:
-        try:
-            state = check_site()
-            print("Estado actual:", state)
+    try:
+        state = check_site()
+        print("Estado:", state)
 
-            # SOLO si cambia de NO a YES
-            if last_state == "no" and state == "yes":
+        if last_state == "no" and state == "yes":
 
-                print("Cambio detectado: no -> yes")
+            now = time.time()
 
-                # doble verificación
-                await asyncio.sleep(DOUBLE_CHECK_WAIT)
+            if now - last_alert > COOLDOWN:
 
-                confirm = check_site()
-                print("Segunda revisión:", confirm)
+                role_ping = f"<@&{ROLE_ID}>"
 
-                if confirm == "yes":
+                for _ in range(3):
+                    await channel.send(
+                        content=role_ping,
+                        embed=make_embed()
+                    )
+                    await asyncio.sleep(2)
 
-                    now = time.time()
+                last_alert = now
+                print("🚨 ALERTA ENVIADA")
 
-                    if now - last_alert > COOLDOWN:
-                        await send_alert(channel)
-                        last_alert = now
-                        print("🚨 ALERTA ENVIADA")
-                    else:
-                        print("Cooldown activo")
+        last_state = state
 
-            last_state = state
+    except Exception as e:
+        print("Monitor error:", e)
 
-        except Exception as e:
-            print("Error loop:", e)
-
+# =====================
+# EVENTS
+# =====================
 @bot.event
 async def on_ready():
     print(f"Conectado como {bot.user}")
-    bot.loop.create_task(monitor())
 
-@bot.command()
-async def test(ctx):
-    await ctx.send("🔥 Test manual iniciado")
-    await send_alert(ctx.channel)
+    channel = bot.get_channel(CHANNEL_ID)
+    await channel.send("💜 BOT BTS ONLINE", view=ControlView())
 
+    monitor.start()
+
+# =====================
+# COMMANDS
+# =====================
 @bot.command()
 async def status(ctx):
     await ctx.send(embed=make_status())
 
-
-
-client.run(TOKEN)
+# =====================
+# RUN
+# =====================
+bot.run(TOKEN)
