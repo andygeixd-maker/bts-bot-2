@@ -1,9 +1,11 @@
 import discord
+from discord.ext import commands
 import requests
 import asyncio
 import time
 from bs4 import BeautifulSoup
 import os
+
 
 TOKEN = os.getenv("TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
