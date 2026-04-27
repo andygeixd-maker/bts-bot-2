@@ -172,7 +172,7 @@ async def on_ready():
 
     channel = bot.get_channel(CHANNEL_ID)
     if channel:
-        await channel.send("💜 BOT BTS ONLINE")
+        await channel.send("💜 BOT BTS ONLINE", view=ControlView())
 
     monitor.start()
 
