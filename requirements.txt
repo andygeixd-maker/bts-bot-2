@@ -1,6 +1,4 @@
 discord.py==2.4.0
 requests
 playwright
-pillow
-pytesseract
-
+beautifulsoup4
