@@ -30,11 +30,11 @@ last_alert = 0
 started_at = time.time()
 last_error = None
 
-AGENTS = [
-    "Mozilla/5.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
-]
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+    "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+    "Referer": "https://www.google.com/"
+}
 
 # =====================
 # CHECK SITE
