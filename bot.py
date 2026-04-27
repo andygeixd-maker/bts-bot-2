@@ -144,6 +144,26 @@ async def monitor():
         print("Monitor error:", e)
 
 # =====================
+# BOTONES (RESTAURADOS)
+# =====================
+class ControlView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="TEST ALERT", style=discord.ButtonStyle.primary)
+    async def test(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🔥 Test ejecutado", ephemeral=True)
+        await interaction.channel.send(embed=make_embed())
+
+    @discord.ui.button(label="FORCE CHECK", style=discord.ButtonStyle.success)
+    async def force(self, interaction: discord.Interaction, button: discord.ui.Button):
+        state = check_site()
+        await interaction.response.send_message(f"🔎 Estado: {state}", ephemeral=True)
+
+        if state == "yes":
+   
+         await interaction.channel.send(embed=make_embed())
+# =====================
 # EVENTS
 # =====================
 @bot.event
