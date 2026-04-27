@@ -24,7 +24,10 @@ pw = None
 # PLAYWRIGHT INIT
 # =====================
 async def init_browser():
-    global browser, page, pw
+    global browser, page
+
+    import os
+    os.system("playwright install chromium")  # 👈 AQUÍ VA
 
     pw = await async_playwright().start()
 
