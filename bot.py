@@ -1,9 +1,9 @@
 import discord
 from discord.ext import commands, tasks
+import requests
 import asyncio
 import time
 import os
-from playwright.async_api import async_playwright
 
 # =====================
 # CONFIG
@@ -15,49 +15,6 @@ URL = os.getenv("URL")
 
 CHECK_EVERY = 4
 COOLDOWN = 120
-
-browser = None
-page = None
-pw = None
-
-# =====================
-# PLAYWRIGHT INIT
-# =====================
-async def init_browser():
-    global browser, page
-
-    import os
-    os.system("playwright install chromium")  # 👈 AQUÍ VA
-
-    pw = await async_playwright().start()
-
-    browser = await pw.chromium.launch(
-        headless=True,
-        args=["--no-sandbox"]
-    )
-
-    context = await browser.new_context()
-    page = await context.new_page()
-
-# =====================
-# SAFE RESTART
-# =====================
-async def restart_browser():
-    global browser, page, pw
-
-    try:
-        if browser:
-            await browser.close()
-    except:
-        pass
-
-    try:
-        if pw:
-            await pw.stop()
-    except:
-        pass
-
-    await init_browser()
 
 # =====================
 # BOT SETUP
@@ -73,17 +30,16 @@ started_at = time.time()
 last_error = None
 
 # =====================
-# CHECK SITE (TU LÓGICA MEJORADA)
+# CHECK SITE (REQUESTS SIMPLE)
 # =====================
-async def check_site():
+def check_site():
     try:
-        if page is None:
-            return "no"
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
 
-        await page.goto(URL, timeout=30000)
-        await asyncio.sleep(2)
-
-        text = (await page.content()).lower()
+        r = requests.get(URL, headers=headers, timeout=10)
+        text = r.text.lower()
 
         no_words = [
             "sin disponibilidad",
@@ -119,7 +75,7 @@ async def check_site():
         return "no"
 
 # =====================
-# EMBED (TU ESTILO)
+# EMBED
 # =====================
 def make_embed():
     embed = discord.Embed(
@@ -134,7 +90,7 @@ def make_embed():
     return embed
 
 # =====================
-# STATUS PANEL (FIXED)
+# STATUS
 # =====================
 def make_status():
     uptime = int(time.time() - started_at)
@@ -151,7 +107,7 @@ def make_status():
     return embed
 
 # =====================
-# LOOP ESTABLE
+# LOOP
 # =====================
 @tasks.loop(seconds=CHECK_EVERY)
 async def monitor():
@@ -162,11 +118,10 @@ async def monitor():
         return
 
     try:
-        state = await check_site()
+        state = check_site()
         print("Estado:", state)
 
         if last_state == "no" and state == "yes":
-
             now = time.time()
 
             if now - last_alert > COOLDOWN:
@@ -187,7 +142,6 @@ async def monitor():
 
     except Exception as e:
         print("Monitor error:", e)
-        await restart_browser()
 
 # =====================
 # EVENTS
@@ -195,8 +149,6 @@ async def monitor():
 @bot.event
 async def on_ready():
     print(f"Conectado como {bot.user}")
-
-    await init_browser()
 
     channel = bot.get_channel(CHANNEL_ID)
     if channel:
@@ -209,8 +161,7 @@ async def on_ready():
 # =====================
 @bot.command()
 async def status(ctx):
-    uptime = int(time.time() - started_at)
-    await ctx.send(f"💜 Estado: {last_state} | Uptime: {uptime}s")
+    await ctx.send(embed=make_status())
 
 # =====================
 # RUN
