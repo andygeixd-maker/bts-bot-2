@@ -126,8 +126,10 @@ async def monitor():
 
             if now - last_alert > COOLDOWN:
 
+                role_ping = f"<@&{int(ROLE_ID)}> 🚨"
+
                 await channel.send(
-                    content=f"<@&{ROLE_ID}> 🚨",
+                    content=role_ping,
                     embed=make_embed(),
                     allowed_mentions=discord.AllowedMentions(roles=True)
                 )
@@ -163,15 +165,7 @@ class ControlView(discord.ui.View):
         if state == "yes":
             await interaction.channel.send(embed=make_embed())
 
-    @discord.ui.button(label="TEST ALERT", style=discord.ButtonStyle.primary)
-    async def force_private(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        await interaction.response.send_message(
-            "🔥 Test ejecutado",
-            ephemeral=True
-        )
-
-        await interaction.channel.send(embed=make_embed())
 # =====================
 # EVENTS
 # =====================
