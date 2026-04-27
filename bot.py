@@ -3,7 +3,6 @@ import requests
 import asyncio
 import time
 from bs4 import BeautifulSoup
-
 import os
 
 TOKEN = os.getenv("TOKEN")
@@ -13,7 +12,7 @@ URL = os.getenv("URL")
 
 CHECK_EVERY = 5
 COOLDOWN = 120
-
+DOUBLE_CHECK_WAIT = 5 
 BASE_DELAY = 3
 MAX_DELAY = 8
   
@@ -27,32 +26,41 @@ MAX_ALERT = 5
 alert_count = 0
 
 def check_site():
-    headers = {"User-Agent": "Mozilla/5.0"}
-    r = requests.get(URL, headers=headers, timeout=10)
-    text = r.text.lower()
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
 
-    keywords_yes = [
-        "comprar",
-        "buy tickets",
-        "tickets available",
-        "ver boletos",
-        "boletos disponibles"
-    ]
+        r = requests.get(URL, headers=headers, timeout=10)
+        text = r.text.lower()
 
-    keywords_no = [
-        "sin disponibilidad",
-        "sold out",
-        "agotado",
-        "no hay boletos"
-    ]
+        no_words = [
+            "sin disponibilidad",
+            "sold out",
+            "agotado",
+            "no hay boletos"
+        ]
 
-    if any(k in text for k in keywords_yes):
-        return "yes"
+        yes_words = [
+            "comprar boletos",
+            "buy tickets",
+            "seleccionar boletos",
+            "tickets available",
+            "find tickets"
+            "poca disponibilidad"
+        ]
 
-    if any(k in text for k in keywords_no):
-        return "no"
+        if any(word in text for word in no_words):
+            return "no"
 
-    return "unknown"
+        if any(word in text for word in yes_words):
+            return "yes"
+
+        return "unknown"
+
+    except Exception as e:
+        print("Error web:", e)
+        return "unknown"
 
 def make_embed():
     embed = discord.Embed(
@@ -90,34 +98,37 @@ async def on_ready():
         return
 
     await channel.send("💜 Bot conectado y monitoreando Ticketmaster.")
-
     while True:
         try:
             state = check_site()
-            print("Estado:", state)
+            print("Estado actual:", state)
 
-            if state == "yes" and last_state != "yes":
-                now = time.time()
+            # SOLO si cambia de NO a YES
+            if last_state == "no" and state == "yes":
 
-                if now - last_alert > COOLDOWN:
-                    role_ping = f"<@&{ROLE_ID}>"
+                print("Cambio detectado: no -> yes")
 
-                    for i in range(5):
-                        await channel.send(
-                            content=role_ping,
-                            embed=make_embed()
-                        )
-                        await asyncio.sleep(1.5)
+                # doble verificación
+                await asyncio.sleep(DOUBLE_CHECK_WAIT)
 
-                    last_alert = now
+                confirm = check_site()
+                print("Segunda revisión:", confirm)
+
+                if confirm == "yes":
+
+                    now = time.time()
+
+                    if now - last_alert > COOLDOWN:
+                        await send_alert(channel)
+                        last_alert = now
+                        print("🚨 ALERTA ENVIADA")
+                    else:
+                        print("Cooldown activo")
 
             last_state = state
 
         except Exception as e:
             print("Error loop:", e)
-
-        await asyncio.sleep(CHECK_EVERY)
-
 
 
 client.run(TOKEN)
